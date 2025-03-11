@@ -14,5 +14,7 @@
 	  "url": "https://github.com/ArgonautJH/ObjectMarkerTool.git"
 	},
 	"keywords": ["object", "Marker", "tool", "unity"],
-	"dependencies": {}
+	"dependencies": {
+		"com.unity.textmeshpro": "^2.1.6"
+	}
   }
