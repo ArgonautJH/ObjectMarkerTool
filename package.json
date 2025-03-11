@@ -15,6 +15,6 @@
 	},
 	"keywords": ["object", "Marker", "tool", "unity"],
 	"dependencies": {
-		"com.unity.textmeshpro": "^2.1.6"
+		"com.unity.textmeshpro": ">=3.0.0"
 	}
   }
