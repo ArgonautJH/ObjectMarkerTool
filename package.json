@@ -1,0 +1,18 @@
+{
+	"name": "com.argonautjh.objectmarkertool",
+	"displayName": "Object Marker Tool",
+	"version": "1.0.0",
+	"unity": "2020.3",
+	"description": "ObjectMarker is a Unity editor tool designed to streamline level design and scene blocking workflows.\nIt allows you to quickly place temporary objects in your scenes and easily differentiate them by assigning custom colors and transparency levels.\nUse ObjectMarker to organize, plan, and visualize your level layouts during early development stages.",
+	"author": {
+	  "name": "ArgonautJH",
+	  "email": "jeonghyeok.lee.dev@gmail.com",
+	  "url": "https://github.com/ArgonautJH"
+	},
+	"repository": {
+	  "type": "git",
+	  "url": "https://github.com/ArgonautJH/ObjectMarkerTool.git"
+	},
+	"keywords": ["object", "Marker", "tool", "unity"],
+	"dependencies": {}
+  }
