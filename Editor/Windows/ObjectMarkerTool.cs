@@ -1,24 +1,34 @@
+using System.Collections.Generic;
 using ArgonautJH.ObjectMarkerTool.Runtime;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
+using UnityEngine.Rendering;
 
 namespace ArgonautJH.ObjectMarkerTool.Editor
 {
+    /// <summary>
+    /// 오브젝트 생성기 윈도우
+    /// </summary>
     public class ObjectMarkerTool : EditorWindow
     {
-        private Color _newColor = Color.white;    // 오브젝트 색상
         private string _3dText = "";
         private float _3dFontSize = 1.0f;
         private string _summary = "";               // 제목
         private string _text = "";                  // 본문
-        private float _alpha = 1.0f;                // 투명도
         
         // 프리셋 데이터베이스를 에디터에서 참조할 수 있도록 필드로 선언
-        private MaterialPresetDatabase presetDatabase;
-        private int selectedPresetIndex = 0;
+        private MaterialPresetDatabase _presetDatabase;
+        private int _selectedPresetIndex = 0;
+        
+        private Dictionary<string, IMaterialConfigurator> shaderConfigurators = new()
+        {
+            { "HDRP/Lit", new HDRPLitConfigurator() },
+            { "Universal Render Pipeline/Lit", new URPLitConfigurator() },
+            { "Standard", new StandardConfigurator() }
+        };
         
         [MenuItem("Tools/Custom Object Creator")]
         public static void ShowWindow()
@@ -31,17 +41,17 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             
             GUILayout.Label("프리셋 설정", EditorStyles.boldLabel);
             // 프리셋 데이터베이스 에셋 참조
-            presetDatabase = (MaterialPresetDatabase)EditorGUILayout.ObjectField("프리셋 데이터베이스", presetDatabase, typeof(MaterialPresetDatabase), false);
+            _presetDatabase = (MaterialPresetDatabase)EditorGUILayout.ObjectField("프리셋 데이터베이스", _presetDatabase, typeof(MaterialPresetDatabase), false);
             
-            if (presetDatabase != null && presetDatabase.Presets.Length > 0)
+            if (_presetDatabase != null && _presetDatabase.Presets.Length > 0)
             {
                 // 프리셋 이름을 배열로 추출해서 드롭다운 메뉴 생성
-                string[] presetNames = new string[presetDatabase.Presets.Length];
-                for (int i = 0; i < presetDatabase.Presets.Length; i++)
+                string[] presetNames = new string[_presetDatabase.Presets.Length];
+                for (int i = 0; i < _presetDatabase.Presets.Length; i++)
                 {
-                    presetNames[i] = presetDatabase.Presets[i].PresetName;
+                    presetNames[i] = _presetDatabase.Presets[i].PresetName;
                 }
-                selectedPresetIndex = EditorGUILayout.Popup("프리셋 선택", selectedPresetIndex, presetNames);
+                _selectedPresetIndex = EditorGUILayout.Popup("프리셋 선택", _selectedPresetIndex, presetNames);
                 
                 // summary와 text 입력 필드
                 _3dText = EditorGUILayout.TextField("큐브 글자", _3dText);
@@ -62,13 +72,13 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         
         private void CreateCustomObject()
         {
-            if (presetDatabase == null || presetDatabase.Presets.Length == 0)
+            if (_presetDatabase == null || _presetDatabase.Presets.Length == 0)
             {
                 Debug.LogError("프리셋 데이터베이스가 설정되지 않았거나, 프리셋이 없습니다!");
                 return;
             }
 
-            MaterialPreset selectedPreset = presetDatabase.Presets[selectedPresetIndex];
+            MaterialPreset selectedPreset = _presetDatabase.Presets[_selectedPresetIndex];
 
             // SceneView의 중앙 좌표에 오브젝트 생성
             Vector3 spawnPosition = Vector3.zero;
@@ -85,7 +95,7 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             Renderer renderer = newObj.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.sharedMaterial = ChangeMaterial(selectedPreset.Color, selectedPreset.Alpha);
+                renderer.material = ChangeMaterial(selectedPreset.Color, selectedPreset.Alpha);
             }
 
             // 글자를 표시할 자식 오브젝트 생성
@@ -125,16 +135,54 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         /// </summary>
         private Material ChangeMaterial(Color newColor, float alpha)
         {
-            Material newMat = new Material(Shader.Find("HDRP/Lit"));
+            string shaderName = GetDefaultShaderName();
+            // Debug.Log(shaderName);
 
-            // Surface Type을 Transparent(1)로, Blend Mode를 Alpha(0)로 설정
-            newMat.SetFloat("_SurfaceType", 1.0f);
-            newMat.SetFloat("_BlendMode", 0.0f);
+            // Material 생성
+            Material newMat = new Material(Shader.Find(shaderName));
 
-            newColor.a = alpha;
-            newMat.SetColor("_BaseColor", newColor);
+            // 정확히 동일한 키가 존재한다면 매핑
+            if (shaderConfigurators.TryGetValue(shaderName, out IMaterialConfigurator configurator))
+            {
+                configurator.Configure(newMat, newColor, alpha);
+            }
+            else
+            {
+                // 매핑 실패 시 기본 동작
+                Debug.LogWarning($"No configurator found for shader: {shaderName}");
+            }
 
             return newMat;
+        }
+        
+        /// <summary>
+        /// 현재 활성화된 렌더 파이프라인에 따른 기본 셰이더 이름을 반환
+        /// </summary>
+        private string GetDefaultShaderName()
+        {
+            var pipelineAsset = GraphicsSettings.renderPipelineAsset;
+            if (pipelineAsset == null)
+            {
+                // 빌트인 렌더 파이프라인인 경우
+                return "Standard";
+            }
+            else
+            {
+                string pipelineTypeName = pipelineAsset.GetType().Name;
+                if (pipelineTypeName.Contains("Universal"))
+                {
+                    return "Universal Render Pipeline/Lit";
+                }
+                else if (pipelineTypeName.Contains("HD"))
+                {
+                    return "HDRP/Lit";
+                }
+                else
+                {
+                    // 예외 상황 처리
+                    return "Standard";
+                }
+            }
         }
     }
 }
