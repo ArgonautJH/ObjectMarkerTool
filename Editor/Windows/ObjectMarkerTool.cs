@@ -6,11 +6,14 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using TMPro;
 using UnityEngine.Rendering;
+using System.IO;
 
 namespace ArgonautJH.ObjectMarkerTool.Editor
 {
     /// <summary>
     /// 오브젝트 생성기 윈도우
+    ///
+    /// todo 추후 메테리얼 생성 여부 선택 가능하도록 할지 고민 필요
     /// </summary>
     public class ObjectMarkerTool : EditorWindow
     {
@@ -22,6 +25,9 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         // 프리셋 데이터베이스를 에디터에서 참조할 수 있도록 필드로 선언
         private MaterialPresetDatabase _presetDatabase;
         private int _selectedPresetIndex = 0;
+        
+        // 캐싱용 딕셔너리 (프리셋 이름을 키로 사용)
+        private Dictionary<string, Material> _materialCache = new();
         
         private Dictionary<string, IMaterialConfigurator> shaderConfigurators = new()
         {
@@ -95,7 +101,7 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             Renderer renderer = newObj.GetComponent<Renderer>();
             if (renderer != null)
             {
-                renderer.material = ChangeMaterial(selectedPreset.Color, selectedPreset.Alpha);
+                renderer.material = GetOrCreateMaterial(selectedPreset);
             }
 
             // 글자를 표시할 자식 오브젝트 생성
@@ -131,27 +137,63 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         }
 
         /// <summary>
-        /// 새 Material을 생성하여 색상과 투명도 설정
+        /// 새 Material을 생성하거나 존재한다면 캐시된 Material을 반환
         /// </summary>
-        private Material ChangeMaterial(Color newColor, float alpha)
+        private Material GetOrCreateMaterial(MaterialPreset preset)
         {
-            string shaderName = GetDefaultShaderName();
-            // Debug.Log(shaderName);
-
+            // 이미 생성된 Material이 있다면 재사용
+            if (_materialCache.TryGetValue(preset.PresetName, out Material cachedMat))
+            {
+                return cachedMat;
+            }
+            
             // Material 생성
+            string shaderName = GetDefaultShaderName();
             Material newMat = new Material(Shader.Find(shaderName));
 
             // 정확히 동일한 키가 존재한다면 매핑
             if (shaderConfigurators.TryGetValue(shaderName, out IMaterialConfigurator configurator))
             {
-                configurator.Configure(newMat, newColor, alpha);
+                configurator.Configure(newMat, preset.Color, preset.Alpha);
             }
             else
             {
                 // 매핑 실패 시 기본 동작
                 Debug.LogWarning($"No configurator found for shader: {shaderName}");
             }
-
+            
+            // _presetDatabase 에셋이 있는 위치를 기준으로 CustomMaterials 폴더 생성
+            if (_presetDatabase != null)
+            {
+                string presetAssetPath = AssetDatabase.GetAssetPath(_presetDatabase);
+                string presetFolderPath = Path.GetDirectoryName(presetAssetPath);
+                string customMaterialsFolder = Path.Combine(presetFolderPath, "CustomMaterials");
+        
+                if (!AssetDatabase.IsValidFolder(customMaterialsFolder))
+                {
+                    AssetDatabase.CreateFolder(presetFolderPath, "CustomMaterials");
+                }
+        
+                // 프리셋 이름을 파일 이름으로 사용하여 에셋 저장
+                string assetPath = Path.Combine(customMaterialsFolder, $"{preset.PresetName}.mat");
+                AssetDatabase.CreateAsset(newMat, assetPath);
+                AssetDatabase.SaveAssets();
+            }
+            else
+            {
+                // _presetDatabase가 없는 경우 기본 경로 사용
+                string folderPath = "Assets/CustomMaterials";
+                if (!AssetDatabase.IsValidFolder(folderPath))
+                {
+                    AssetDatabase.CreateFolder("Assets", "CustomMaterials");
+                }
+                string assetPath = $"{folderPath}/{preset.PresetName}.mat";
+                AssetDatabase.CreateAsset(newMat, assetPath);
+                AssetDatabase.SaveAssets();
+            }
+    
+            // 캐시에 저장 후 반환
+            _materialCache[preset.PresetName] = newMat;
             return newMat;
         }
         
