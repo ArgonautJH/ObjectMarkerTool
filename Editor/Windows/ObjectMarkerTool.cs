@@ -167,11 +167,11 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             {
                 string presetAssetPath = AssetDatabase.GetAssetPath(_presetDatabase);
                 string presetFolderPath = Path.GetDirectoryName(presetAssetPath);
-                string customMaterialsFolder = Path.Combine(presetFolderPath, "CustomMaterials");
+                string customMaterialsFolder = Path.Combine(presetFolderPath, _presetDatabase.name+"_Materials");
         
                 if (!AssetDatabase.IsValidFolder(customMaterialsFolder))
                 {
-                    AssetDatabase.CreateFolder(presetFolderPath, "CustomMaterials");
+                    AssetDatabase.CreateFolder(presetFolderPath, _presetDatabase.name+"_Materials");
                 }
         
                 // 프리셋 이름을 파일 이름으로 사용하여 에셋 저장
