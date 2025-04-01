@@ -90,7 +90,10 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             Vector3 spawnPosition = Vector3.zero;
             if (SceneView.lastActiveSceneView != null)
             {
-                spawnPosition = SceneView.lastActiveSceneView.pivot;
+                // spawnPosition = SceneView.lastActiveSceneView.pivot;
+                Camera sceneCam = SceneView.lastActiveSceneView.camera;
+                float distance = 3f; // 카메라에서 5 유닛 앞에 생성
+                spawnPosition = sceneCam.transform.position + sceneCam.transform.forward * distance;
             }
 
             GameObject newObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
