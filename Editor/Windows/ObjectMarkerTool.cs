@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using ArgonautJH.ObjectMarkerTool.Runtime;
 using UnityEditor;
@@ -52,6 +53,16 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             if (GUILayout.Button("스크립트 추출 경로 선택"))
             {
                 _exportScriptFolder = EditorUtility.OpenFolderPanel("스크립트 추출 경로 선택", Application.dataPath, "");
+                
+                // 스크립트 추출 경로를 결정 (사용자가 선택하지 않으면 기본 경로 사용)
+                if (string.IsNullOrEmpty(_exportScriptFolder))
+                {
+                    _exportScriptFolder = "Assets/TempScript";
+                    if (!AssetDatabase.IsValidFolder(_exportScriptFolder))
+                    {
+                        AssetDatabase.CreateFolder("Assets", "TempScript");
+                    }
+                }
             }
             EditorGUILayout.LabelField("스크립트 추출 경로:", _exportScriptFolder);
             
@@ -99,10 +110,7 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             }
             
             // 사용자가 스크립트 추출 경로를 지정했다면 해당 위치에 ObjectComponent가 있는지 확인/복사
-            if (!string.IsNullOrEmpty(_exportScriptFolder))
-            {
-                EnsureObjectComponentInExportFolder(_exportScriptFolder);
-            }
+            bool useExportedComponent = EnsureObjectComponentInExportFolder(_exportScriptFolder);
 
             MaterialPreset selectedPreset = _presetDatabase.Presets[_selectedPresetIndex];
 
@@ -144,14 +152,39 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             // 글자를 3D 공간에서 회전/크기 조절 가능
             textObj.transform.localEulerAngles = new Vector3(0, 180, 0); 
             
-            //  ColorChanger 컴포넌트
-            ObjectComponent comp = newObj.GetComponent<ObjectComponent>();
-            if (comp == null)
+            if (useExportedComponent)
             {
-                comp = newObj.AddComponent<ObjectComponent>();
+                Type exportedType = GetExportedObjectComponentType();
+                if (exportedType != null)
+                {
+                    var comp = newObj.AddComponent(exportedType);
+                    var summaryField = exportedType.GetField("summary");
+                    var textField = exportedType.GetField("text");
+                    
+                    if (summaryField != null) summaryField.SetValue(comp, _summary);
+                    if (textField != null) textField.SetValue(comp, _text);
+                }
+                else
+                {
+                    Debug.LogError("ExportedObjectComponent 타입을 찾을 수 없습니다.");
+                }
             }
-            comp.summary = _summary;
-            comp.text = _text;
+            else
+            {
+                // 만약 복사에 실패하면 기본 ObjectComponent 사용
+                ObjectComponent comp = newObj.AddComponent<ObjectComponent>();
+                comp.summary = _summary;
+                comp.text = _text;
+            }
+            
+            // // ObjectComponent 컴포넌트
+            // ObjectComponent comp = newObj.GetComponent<ObjectComponent>();
+            // if (comp == null)
+            // {
+            //     comp = newObj.AddComponent<ObjectComponent>();
+            // }
+            // comp.summary = _summary;
+            // comp.text = _text;
             
             // 새로 생성된 오브젝트 선택
             Selection.activeGameObject = newObj;
@@ -160,12 +193,15 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         }
         
         /// <summary>
-        /// 지정된 폴더에 ObjectComponent 스크립트가 없으면 복사 (meta 파일 포함)
+        /// 지정된 폴더에 ExportedObjectComponent 스크립트가 없으면
+        /// 원본 ObjectComponent.cs를 복사하고 클래스 이름을 치환하여 생성
         /// </summary>
-        /// <param name="folderPath">복사할 대상 폴더 경로</param>
-        private void EnsureObjectComponentInExportFolder(string folderPath)
+        /// <param name="folderPath">대상 폴더 경로 (예: Assets/TempScript 또는 사용자가 선택한 경로)</param>
+        /// <returns>복사에 성공하면 true</returns>
+        private bool EnsureObjectComponentInExportFolder(string folderPath)
         {
-            string targetFile = Path.Combine(folderPath, "ObjectComponent.cs");
+            // 대상 경로: {folderPath}/ExportedObjectComponent.cs
+            string targetFile = Path.Combine(folderPath, "ExportedObjectComponent.cs");
 
             if (!File.Exists(targetFile))
             {
@@ -173,24 +209,59 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                 string sourcePath = "Packages/com.argonautjh.objectmarkertool/Runtime/Scripts/ObjectComponent.cs";
                 if (File.Exists(sourcePath))
                 {
-                    // 스크립트 복사
-                    File.Copy(sourcePath, targetFile, true);
-
-                    // meta 파일도 함께 복사해서 GUID 유지
-                    string sourceMeta = sourcePath + ".meta";
-                    string targetMeta = targetFile + ".meta";
-                    if (File.Exists(sourceMeta))
+                    try
                     {
-                        File.Copy(sourceMeta, targetMeta, true);
+                        // 원본 코드 읽기
+                        string sourceCode = File.ReadAllText(sourcePath);
+                        // 클래스 이름 변경: "public class ObjectComponent" -> "public class ExportedObjectComponent"
+                        string newCode = sourceCode.Replace("public class ObjectComponent", "public class ExportedObjectComponent");
+                        // 변경된 코드를 대상 파일에 저장
+                        File.WriteAllText(targetFile, newCode);
+
+                        // meta 파일도 복사 (GUID 유지)
+                        string sourceMeta = sourcePath + ".meta";
+                        string targetMeta = targetFile + ".meta";
+                        if (File.Exists(sourceMeta))
+                        {
+                            File.Copy(sourceMeta, targetMeta, true);
+                        }
+                        AssetDatabase.ImportAsset(targetFile);
+                        Debug.Log("ExportedObjectComponent 스크립트가 생성되었습니다: " + targetFile);
+                        return true;
                     }
-                    AssetDatabase.ImportAsset(targetFile);
-                    Debug.Log("ObjectComponent 스크립트가 " + targetFile + " 로 복사되었습니다.");
+                    catch (Exception ex)
+                    {
+                        Debug.LogError("스크립트 복사/치환 중 오류 발생: " + ex.Message);
+                        return false;
+                    }
                 }
                 else
                 {
                     Debug.LogError("원본 ObjectComponent 스크립트를 찾을 수 없습니다: " + sourcePath);
+                    return false;
                 }
             }
+            else
+            {
+                Debug.Log("ExportedObjectComponent 스크립트가 이미 존재합니다: " + targetFile);
+                return true;
+            }
+        }
+        
+        /// <summary>
+        /// AppDomain 내에서 ExportedObjectComponent 타입을 검색
+        /// </summary>
+        private Type GetExportedObjectComponentType()
+        {
+            string typeName = "ArgonautJH.ObjectMarkerTool.Runtime";
+
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type t = assembly.GetType(typeName);
+                if (t != null)
+                    return t;
+            }
+            return null;
         }
 
         /// <summary>
