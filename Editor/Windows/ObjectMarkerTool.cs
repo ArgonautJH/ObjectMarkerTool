@@ -170,7 +170,7 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             if (!File.Exists(targetFile))
             {
                 // 원본 경로 (실제 UPM 패키지 내 경로에 맞게 수정)
-                string sourcePath = "Packages/ArgonautJH.ObjectMarkerTool/Runtime/ObjectComponent.cs";
+                string sourcePath = "Packages/com.argonautjh.objectmarkertool/Runtime/Scripts/ObjectComponent.cs";
                 if (File.Exists(sourcePath))
                 {
                     // 스크립트 복사
@@ -190,10 +190,6 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                 {
                     Debug.LogError("원본 ObjectComponent 스크립트를 찾을 수 없습니다: " + sourcePath);
                 }
-            }
-            else
-            {
-                Debug.Log("ObjectComponent 스크립트가 이미 존재합니다: " + targetFile);
             }
         }
 
