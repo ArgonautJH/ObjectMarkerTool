@@ -75,6 +75,12 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                 EnsureObjectComponentInExportFolder(_exportScriptFolder);
             }
             
+            // "일괄 컴포넌트 업데이트" 버튼: 씬 내 기존 오브젝트의 ObjectComponent를 ExportedObjectComponent로 변환
+            if (GUILayout.Button("일괄 컴포넌트 업데이트"))
+            {
+                UpdateExistingComponentsInScene();
+            }
+            
             
             GUILayout.Label("프리셋 설정", EditorStyles.boldLabel);
             // 프리셋 데이터베이스 에셋 참조
@@ -263,6 +269,48 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                 Debug.Log("ExportedObjectComponent 스크립트가 이미 존재합니다: " + targetFile);
                 return true;
             }
+        }
+        
+        /// <summary>
+        /// 씬 내의 기존 ObjectComponent를 ExportedObjectComponent로 변환
+        /// </summary>
+        private void UpdateExistingComponentsInScene()
+        {
+            // ExportedObjectComponent 타입 검색
+            Type exportedType = GetExportedObjectComponentType();
+            if (exportedType == null)
+            {
+                Debug.LogError("ExportedObjectComponent 타입을 찾을 수 없습니다. 스크립트를 내보내세요.");
+                return;
+            }
+
+            // 씬 내의 모든 ObjectComponent를 찾음
+            ObjectComponent[] oldComponents = FindObjectsOfType<ObjectComponent>(true);
+            int updateCount = 0;
+
+            foreach (ObjectComponent oldComp in oldComponents)
+            {
+                GameObject go = oldComp.gameObject;
+                // 기존 데이터를 저장
+                string summaryData = oldComp.summary;
+                string textData = oldComp.text;
+
+                // 기존 컴포넌트 제거
+                DestroyImmediate(oldComp, true);
+
+                // 새 ExportedObjectComponent 추가
+                var newComp = go.AddComponent(exportedType);
+                var summaryField = exportedType.GetField("summary");
+                var textField = exportedType.GetField("text");
+                if (summaryField != null)
+                    summaryField.SetValue(newComp, summaryData);
+                if (textField != null)
+                    textField.SetValue(newComp, textData);
+
+                updateCount++;
+            }
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            EditorUtility.DisplayDialog("업데이트 완료", updateCount + "개의 컴포넌트가 업데이트되었습니다.", "확인");
         }
         
         /// <summary>
