@@ -36,6 +36,9 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             { "Standard", new StandardConfigurator() }
         };
         
+        // 스크립트 추출 경로 (사용자 지정)
+        private string _exportScriptFolder = "";
+        
         [MenuItem("Tools/Custom Object Creator")]
         public static void ShowWindow()
         {
@@ -44,6 +47,14 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
 
         private void OnGUI()
         {
+            GUILayout.Label("추출 경로 설정", EditorStyles.boldLabel);
+            // 스크립트 추출 경로 설정 UI
+            if (GUILayout.Button("스크립트 추출 경로 선택"))
+            {
+                _exportScriptFolder = EditorUtility.OpenFolderPanel("스크립트 추출 경로 선택", Application.dataPath, "");
+            }
+            EditorGUILayout.LabelField("스크립트 추출 경로:", _exportScriptFolder);
+            
             
             GUILayout.Label("프리셋 설정", EditorStyles.boldLabel);
             // 프리셋 데이터베이스 에셋 참조
@@ -76,12 +87,21 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             }
         }
         
+        /// <summary>
+        /// 사용자가 입력한 정보를 바탕으로 오브젝트 생성
+        /// </summary>
         private void CreateCustomObject()
         {
             if (_presetDatabase == null || _presetDatabase.Presets.Length == 0)
             {
                 Debug.LogError("프리셋 데이터베이스가 설정되지 않았거나, 프리셋이 없습니다!");
                 return;
+            }
+            
+            // 사용자가 스크립트 추출 경로를 지정했다면 해당 위치에 ObjectComponent가 있는지 확인/복사
+            if (!string.IsNullOrEmpty(_exportScriptFolder))
+            {
+                EnsureObjectComponentInExportFolder(_exportScriptFolder);
             }
 
             MaterialPreset selectedPreset = _presetDatabase.Presets[_selectedPresetIndex];
@@ -137,6 +157,44 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             Selection.activeGameObject = newObj;
             
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        }
+        
+        /// <summary>
+        /// 지정된 폴더에 ObjectComponent 스크립트가 없으면 복사 (meta 파일 포함)
+        /// </summary>
+        /// <param name="folderPath">복사할 대상 폴더 경로</param>
+        private void EnsureObjectComponentInExportFolder(string folderPath)
+        {
+            string targetFile = Path.Combine(folderPath, "ObjectComponent.cs");
+
+            if (!File.Exists(targetFile))
+            {
+                // 원본 경로 (실제 UPM 패키지 내 경로에 맞게 수정)
+                string sourcePath = "Packages/ArgonautJH.ObjectMarkerTool/Runtime/ObjectComponent.cs";
+                if (File.Exists(sourcePath))
+                {
+                    // 스크립트 복사
+                    File.Copy(sourcePath, targetFile, true);
+
+                    // meta 파일도 함께 복사해서 GUID 유지
+                    string sourceMeta = sourcePath + ".meta";
+                    string targetMeta = targetFile + ".meta";
+                    if (File.Exists(sourceMeta))
+                    {
+                        File.Copy(sourceMeta, targetMeta, true);
+                    }
+                    AssetDatabase.ImportAsset(targetFile);
+                    Debug.Log("ObjectComponent 스크립트가 " + targetFile + " 로 복사되었습니다.");
+                }
+                else
+                {
+                    Debug.LogError("원본 ObjectComponent 스크립트를 찾을 수 없습니다: " + sourcePath);
+                }
+            }
+            else
+            {
+                Debug.Log("ObjectComponent 스크립트가 이미 존재합니다: " + targetFile);
+            }
         }
 
         /// <summary>
