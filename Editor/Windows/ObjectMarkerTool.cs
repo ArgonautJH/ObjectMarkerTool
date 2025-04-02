@@ -53,18 +53,27 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             if (GUILayout.Button("스크립트 추출 경로 선택"))
             {
                 _exportScriptFolder = EditorUtility.OpenFolderPanel("스크립트 추출 경로 선택", Application.dataPath, "");
-                
+
                 // 스크립트 추출 경로를 결정 (사용자가 선택하지 않으면 기본 경로 사용)
                 if (string.IsNullOrEmpty(_exportScriptFolder))
                 {
                     _exportScriptFolder = "Assets/TempScript";
+                }
+            }
+            EditorGUILayout.LabelField("스크립트 추출 경로:", _exportScriptFolder);
+
+            if (GUILayout.Button("스크립트 추출하기"))
+            {
+                if (_exportScriptFolder.Equals("Assets/TempScript"))
+                {
                     if (!AssetDatabase.IsValidFolder(_exportScriptFolder))
                     {
                         AssetDatabase.CreateFolder("Assets", "TempScript");
                     }
                 }
+                
+                EnsureObjectComponentInExportFolder(_exportScriptFolder);
             }
-            EditorGUILayout.LabelField("스크립트 추출 경로:", _exportScriptFolder);
             
             
             GUILayout.Label("프리셋 설정", EditorStyles.boldLabel);
@@ -108,9 +117,6 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                 Debug.LogError("프리셋 데이터베이스가 설정되지 않았거나, 프리셋이 없습니다!");
                 return;
             }
-            
-            // 사용자가 스크립트 추출 경로를 지정했다면 해당 위치에 ObjectComponent가 있는지 확인/복사
-            bool useExportedComponent = EnsureObjectComponentInExportFolder(_exportScriptFolder);
 
             MaterialPreset selectedPreset = _presetDatabase.Presets[_selectedPresetIndex];
 
@@ -152,6 +158,9 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
             // 글자를 3D 공간에서 회전/크기 조절 가능
             textObj.transform.localEulerAngles = new Vector3(0, 180, 0); 
             
+            // 사용자가 스크립트 추출 경로를 지정했다면 해당 위치에 ObjectComponent가 있는지 확인/복사
+            bool useExportedComponent = EnsureObjectComponentInExportFolder(_exportScriptFolder);
+            
             if (useExportedComponent)
             {
                 Type exportedType = GetExportedObjectComponentType();
@@ -160,7 +169,6 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
                     var comp = newObj.AddComponent(exportedType);
                     var summaryField = exportedType.GetField("summary");
                     var textField = exportedType.GetField("text");
-                    
                     if (summaryField != null) summaryField.SetValue(comp, _summary);
                     if (textField != null) textField.SetValue(comp, _text);
                 }
@@ -202,11 +210,20 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         {
             // 대상 경로: {folderPath}/ExportedObjectComponent.cs
             string targetFile = Path.Combine(folderPath, "ExportedObjectComponent.cs");
+            
+            // 테스트 모드일 경우와 아닐 경우의 경로를 분기합니다.
+#if TEST_MODE
+            // 예: 테스트 시 로컬 경로 (Assets 내의 임시 스크립트 폴더)
+            string sourcePath = "Assets/ObjectMarkerTool/Runtime/Scripts/ObjectComponent.cs";
+#else
+        // UMP 패키지 경로
+        string sourcePath = "Packages/com.argonautjh.objectmarkertool/Runtime/Scripts/ObjectComponent.cs";
+#endif
 
             if (!File.Exists(targetFile))
             {
-                // 원본 경로 (실제 UPM 패키지 내 경로에 맞게 수정)
-                string sourcePath = "Packages/com.argonautjh.objectmarkertool/Runtime/Scripts/ObjectComponent.cs";
+                // // 원본 경로 (실제 UPM 패키지 내 경로에 맞게 수정)
+                // string sourcePath = "Packages/com.argonautjh.objectmarkertool/Runtime/Scripts/ObjectComponent.cs";
                 if (File.Exists(sourcePath))
                 {
                     try
@@ -253,7 +270,7 @@ namespace ArgonautJH.ObjectMarkerTool.Editor
         /// </summary>
         private Type GetExportedObjectComponentType()
         {
-            string typeName = "ArgonautJH.ObjectMarkerTool.Runtime";
+            string typeName = "ArgonautJH.ObjectMarkerTool.Runtime.ExportedObjectComponent";
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
